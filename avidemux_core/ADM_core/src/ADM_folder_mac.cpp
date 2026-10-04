@@ -15,15 +15,19 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <copyfile.h>
+#include <ftw.h>
+#include <stdio.h>
 #include <sys/stat.h>
 #include <string>
+#include <sys/stdio.h>
 #include <Carbon/Carbon.h>
 #include <unistd.h>
 
 #include "ADM_default.h"
 extern char *ADM_getRelativePath(const char *base0, const char *base1, const char *base2, const char *base3);
 
-#define MAX_PATH_SIZE 1024
+#define MAX_PATH_SIZE 4096
 
 static char ADM_basedir[MAX_PATH_SIZE] = {0};
 static std::string ADM_autodir;
@@ -73,6 +77,51 @@ static void AddSeparator(char *path)
 {
     if (path && (strlen(path) < strlen(ADM_SEPARATOR) || strncmp(path + strlen(path) - strlen(ADM_SEPARATOR), ADM_SEPARATOR, strlen(ADM_SEPARATOR)) != 0))
         strcat(path, ADM_SEPARATOR);
+}
+
+static bool makeDirectories(const std::string &path)
+{
+    if (path.empty() || path.size() >= MAX_PATH_SIZE)
+        return false;
+
+    char mutablePath[MAX_PATH_SIZE];
+    strcpy(mutablePath, path.c_str());
+    for (char *cursor = mutablePath + 1; *cursor; ++cursor)
+    {
+        if (*cursor != '/')
+            continue;
+        *cursor = '\0';
+        if (mkdir(mutablePath, 0755) != 0 && errno != EEXIST)
+            return false;
+        *cursor = '/';
+    }
+    if (mkdir(mutablePath, 0755) != 0 && errno != EEXIST)
+        return false;
+
+    struct stat info;
+    return stat(mutablePath, &info) == 0 && S_ISDIR(info.st_mode);
+}
+
+static bool isDirectory(const std::string &path)
+{
+    struct stat info;
+    return stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode);
+}
+
+static int removeTreeEntry(const char *path, const struct stat *info, int type, struct FTW *walk)
+{
+    UNUSED_ARG(type);
+    UNUSED_ARG(walk);
+    if (info && S_ISDIR(info->st_mode))
+        chmod(path, 0700);
+    if (remove(path) == 0 || errno == ENOENT)
+        return 0;
+    return -1;
+}
+
+static void removeTree(const std::string &path)
+{
+    nftw(path.c_str(), removeTreeEntry, 16, FTW_DEPTH | FTW_PHYS);
 }
 
 /**
@@ -125,7 +174,8 @@ const char *ADM_getConfigBaseDir(void)
  */
 void ADM_initBaseDir(int argc, char *argv[])
 {
-    // Get the base directory
+    UNUSED_ARG(argc);
+    UNUSED_ARG(argv);
 
     const char* homeEnv = getenv("HOME");
 
@@ -134,24 +184,78 @@ void ADM_initBaseDir(int argc, char *argv[])
         ADM_warning("Oops: can't determine $HOME.");
         return;
     }
-    // Try to open the .avidemux directory
+    const std::string home(homeEnv);
+    const std::string legacyDir = home + "/.avidemux6";
+    const std::string appSupportDir = home + "/Library/Application Support";
+    const std::string appDir = appSupportDir + "/Avidemux Mac";
+    struct stat appDirInfo;
 
-    strcpy(ADM_basedir, homeEnv);
+    // Keep the legacy tree intact. On first launch of this fork, copy the
+    // complete user data tree so preferences, jobs, presets, scripts and
+    // user-installed plugins are copied. Plugins for a different CPU
+    // architecture are rejected later by the dynamic loader.
+    bool useAppSupport = false;
+    if (lstat(appDir.c_str(), &appDirInfo) == 0)
+    {
+        useAppSupport = S_ISDIR(appDirInfo.st_mode);
+        if (!useAppSupport)
+            ADM_warning("Avidemux Mac config path exists but is not a directory: %s\n", appDir.c_str());
+    }
+    else if (errno == ENOENT)
+    {
+        if (makeDirectories(appSupportDir) && isDirectory(legacyDir))
+        {
+            const std::string stagingDir = appSupportDir + "/Avidemux Mac.migration-" +
+                std::to_string(static_cast<long long>(getpid()));
+            removeTree(stagingDir);
+            if (copyfile(legacyDir.c_str(), stagingDir.c_str(), NULL,
+                         COPYFILE_ALL | COPYFILE_RECURSIVE | COPYFILE_NOFOLLOW_SRC | COPYFILE_EXCL) != 0)
+            {
+                ADM_warning("Could not migrate existing settings from %s to %s: %s\n",
+                            legacyDir.c_str(), appDir.c_str(), strerror(errno));
+                removeTree(stagingDir);
+            }
+            else
+            {
+                // Publish the complete copy atomically and never replace a
+                // fork config created by another process.
+                if (renamex_np(stagingDir.c_str(), appDir.c_str(), RENAME_EXCL) == 0)
+                    useAppSupport = true;
+                else if (errno == EEXIST && isDirectory(appDir))
+                    useAppSupport = true;
+                else
+                {
+                    ADM_warning("Could not publish migrated settings at %s: %s\n",
+                                appDir.c_str(), strerror(errno));
+                    removeTree(stagingDir);
+                }
+                if (useAppSupport)
+                {
+                    removeTree(stagingDir);
+                    ADM_info("Copied existing user data from %s to %s\n",
+                             legacyDir.c_str(), appDir.c_str());
+                }
+            }
+        }
+        else if (makeDirectories(appSupportDir) && !isDirectory(legacyDir))
+        {
+            useAppSupport = makeDirectories(appDir);
+        }
+    }
+
+    std::string selectedPath = useAppSupport ? appDir : legacyDir;
+    if (selectedPath.size() + strlen(ADM_SEPARATOR) >= sizeof(ADM_basedir))
+    {
+        ADM_error("Avidemux configuration path is too long: %s\n", selectedPath.c_str());
+        return;
+    }
+    strcpy(ADM_basedir, selectedPath.c_str());
     AddSeparator(ADM_basedir);
 
-    const char *ADM_DIR_NAME = ".avidemux6";
-
-    strcat(ADM_basedir, ADM_DIR_NAME);
-    strcat(ADM_basedir, ADM_SEPARATOR);
-
     if (ADM_mkdir(ADM_basedir))
-    {
         ADM_info("Using \"%s\" as base directory for prefs, jobs, etc.\n", ADM_basedir);
-    }
     else
-    {
-        ADM_error("Oops: cannot create the .avidemux directory (\"%s\")\n", ADM_basedir);
-    }
+        ADM_error("Cannot create Avidemux configuration directory (\"%s\")\n", ADM_basedir);
 }
 /**
  * \fn ADM_getI8NDir

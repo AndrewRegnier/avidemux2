@@ -194,7 +194,11 @@ bool myQApplication::event(QEvent *event)
     {
         QFileOpenEvent *openEvent = static_cast<QFileOpenEvent *>(event);
         ADM_info("FileOpen event for \"%s\"\n", openEvent->file().toUtf8().constData());
-        fileOpenQueue.append(openEvent->url());
+        QUrl url = openEvent->url();
+        if (url.isEmpty() && !openEvent->file().isEmpty())
+            url = QUrl::fromLocalFile(openEvent->file());
+        if (!url.isEmpty())
+            fileOpenQueue.append(url);
         handleFileOpenRequests();
     }
     return QApplication::event(event);
@@ -221,6 +225,11 @@ void myQApplication::handleFileOpenRequests(void)
 // #endif
 static void mySetStyle()
 {
+#ifdef __APPLE__
+    // Leave Qt's platform style in place so AppKit controls and system
+    // light/dark appearance remain available on macOS.
+    return;
+#else
 #ifdef USING_QT6
     // QApplication::setStyle(new oclero::qlementine::QlementineStyle(currentQApplication()));
     QApplication::setStyle("fusion");
@@ -230,7 +239,119 @@ static void mySetStyle()
 #error "QT4 is obsolete"
     QApplication::setStyle("cleanlooks");
 #endif
+#endif
 }
+
+#ifdef __APPLE__
+/**
+ * Give the macOS build a roomy editing layout and let Qt use the native
+ * platform palette. The editing widgets and their action connections remain
+ * shared with the other platforms.
+ */
+void MainWindow::configureMacMainWindow(void)
+{
+    setWindowTitle(QStringLiteral("Avidemux Mac"));
+    QSize minimumSize(960, 680);
+    QSize initialSize(1360, 860);
+    if (QScreen *screen = QGuiApplication::primaryScreen())
+    {
+        const QSize available = screen->availableGeometry().size();
+        minimumSize = QSize(qMin(minimumSize.width(), available.width()),
+                            qMin(minimumSize.height(), available.height()));
+        initialSize = QSize(qMin(initialSize.width(), available.width()),
+                            qMin(initialSize.height(), available.height()));
+    }
+    setMinimumSize(minimumSize);
+    setUnifiedTitleAndToolBarOnMac(true);
+    setDockNestingEnabled(true);
+    setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
+
+    ui.codecWidget->setAllowedAreas(Qt::RightDockWidgetArea);
+    ui.codecWidget->setMinimumWidth(292);
+    ui.codecWidget->setMaximumWidth(360);
+    ui.selectionWidget->setAllowedAreas(Qt::RightDockWidgetArea);
+    ui.selectionWidget->setMinimumWidth(292);
+    ui.selectionWidget->setMaximumWidth(360);
+    ui.selectionWidget->setMinimumHeight(124);
+    ui.selectionWidget->setMaximumHeight(QWIDGETSIZE_MAX);
+    ui.dockWidgetContents_7->setMinimumWidth(0);
+    ui.dockWidgetContents_7->setMaximumWidth(QWIDGETSIZE_MAX);
+    ui.dockWidgetContents_7->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    ui.selectionHeading->setVisible(true);
+    ui.label_2->setText(tr("Marker A"));
+    ui.label_9->setText(tr("Marker B"));
+    ui.navigationWidget->setMinimumHeight(120);
+    ui.navigationWidget->setMaximumHeight(132);
+    ui.verticalSpacer_8->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_12->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_9->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_13->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_10->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalLayout_3->invalidate();
+    ui.toolBar->setMovable(false);
+    ui.toolBar->setFloatable(false);
+    ui.toolBar->setIconSize(QSize(22, 22));
+    ui.toolBar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+
+    addDockWidget(Qt::RightDockWidgetArea, ui.codecWidget);
+    addDockWidget(Qt::RightDockWidgetArea, ui.selectionWidget);
+    splitDockWidget(ui.codecWidget, ui.selectionWidget, Qt::Vertical);
+
+    // Markers and codec selection should remain discoverable when reading the
+    // interface with VoiceOver, even though the dock title bars are hidden.
+    ui.comboBoxVideo->setAccessibleName(tr("Video output codec"));
+    ui.comboBoxVideo->setAccessibleDescription(tr("Choose copy or an encoder for the output video."));
+    ui.comboBoxAudio->setAccessibleName(tr("Audio output codec"));
+    ui.comboBoxAudio->setAccessibleDescription(tr("Choose copy or an encoder for the output audio."));
+    ui.comboBoxFormat->setAccessibleName(tr("Output container format"));
+    ui.horizontalSlider->setAccessibleName(tr("Video timeline"));
+    ui.horizontalSlider->setAccessibleDescription(
+        tr("Scrub through the video. Marker A and marker B define the selected range."));
+    ui.pushButtonJumpToMarkerA->setAccessibleName(tr("Jump to marker A"));
+    ui.pushButtonJumpToMarkerB->setAccessibleName(tr("Jump to marker B"));
+    ui.toolButtonSetMarkerA->setAccessibleName(tr("Set marker A at the current frame"));
+    ui.toolButtonSetMarkerB->setAccessibleName(tr("Set marker B at the current frame"));
+    ui.pushButtonJumpToMarkerA->setToolTip(tr("Jump to marker A [PAGE UP]"));
+    ui.pushButtonJumpToMarkerB->setToolTip(tr("Jump to marker B [PAGE DOWN]"));
+    ui.selectionDuration->setAccessibleName(tr("Selected range duration"));
+    ui.currentTime->setAccessibleName(tr("Current video time"));
+    ui.totalTime->setAccessibleName(tr("Total video duration"));
+    ui.toolButtonPlay->setAccessibleName(tr("Play or pause"));
+    ui.toolButtonPreviousFrame->setAccessibleName(tr("Previous frame"));
+    ui.toolButtonNextFrame->setAccessibleName(tr("Next frame"));
+    QPalette videoPalette = ui.frame_video->palette();
+    videoPalette.setColor(QPalette::Window, QColor(20, 22, 27));
+    ui.frame_video->setPalette(videoPalette);
+    ui.frame_video->setAutoFillBackground(true);
+    ui.frame_video->setAccessibleName(tr("Video preview"));
+    ui.previewStack->setFrameShape(QFrame::NoFrame);
+    ui.previewStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui.emptyPreviewPage->setAutoFillBackground(true);
+    ui.emptyPreviewPage->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui._10->setStretch(0, 1);
+    ui._10->setStretch(1, 0);
+    ui.emptyPreviewPage->setPalette(videoPalette);
+    ui.emptyPreviewLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: rgba(230, 234, 242, 190); background: transparent; }"));
+    // Keep the renderer page active until its video widget and GL context are
+    // initialized in UI_RunApp. That page becomes the empty state afterward.
+    ui.previewStack->setCurrentWidget(ui.frame_video);
+
+    if (!macInitialLayoutApplied)
+    {
+        resize(initialSize);
+        macInitialLayoutApplied = true;
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    resizeDocks(QList<QDockWidget *>() << ui.codecWidget << ui.selectionWidget,
+                QList<int>() << 344 << 128, Qt::Vertical);
+#endif
+
+    // Qt's macOS style follows the current system appearance automatically.
+    // The separate legacy theme submenu would imply a fixed app appearance.
+    ui.menuThemes->menuAction()->setVisible(false);
+}
+#endif
 
 void MainWindow::comboChanged(int z)
 {
@@ -691,6 +812,13 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
     MainWindow::mainWindowSingleton = this;
     qtRegisterDialog(this);
     ui.setupUi(this);
+#ifdef __APPLE__
+    macInitialLayoutApplied = false;
+#else
+    // Keep the traditional video canvas active on other platforms; the Mac
+    // build switches between this page and its dedicated empty state.
+    ui.previewStack->setCurrentWidget(ui.frame_video);
+#endif
     dragState = dragState_Normal;
     navigateByTimeButtonsState = 0;
     navigateWhilePlayingState = 0;
@@ -718,7 +846,6 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
 
 #ifdef __APPLE__
     ui.navButtonsLayout->setSpacing(2);
-    // Qt upscales 2x sized icons in the toolbar, making them huge and pixelated in HiDPI conditions, WTF?
     ui.toolBar->setIconSize(QSize(24, 24));
 #endif
     //
@@ -914,6 +1041,9 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
     widgetsUpdateTooltips();
 
     this->adjustSize();
+#ifdef __APPLE__
+    configureMacMainWindow();
+#endif
     ui.currentTime->setTextMargins(0, 0, 0, 0); // some Qt themes mess with text margins
 
     threshold = RESIZE_THRESHOLD;
@@ -1090,6 +1220,8 @@ bool MainWindow::buildMenu(QMenu *root, MenuEntry *menu, int nb)
             default:
                 a->setMenuRole(QAction::NoRole);
             }
+            if (m->event == ACT_PREFERENCES)
+                a->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Comma));
 #endif
             m->cookie = (void *)a;
             if (m->shortCut)
@@ -1143,6 +1275,28 @@ bool MainWindow::buildMenu(QMenu *root, MenuEntry *menu, int nb)
                 }
                 QKeySequence s(m->shortCut);
                 a->setShortcut(s);
+#ifdef __APPLE__
+                // Use Cocoa's standard Command shortcuts for common file
+                // actions; custom frame editing shortcuts keep their mapping.
+                switch (m->event)
+                {
+                case ACT_OPEN_VIDEO:
+                    a->setShortcut(QKeySequence(QKeySequence::Open));
+                    break;
+                case ACT_SAVE_VIDEO:
+                    a->setShortcut(QKeySequence(QKeySequence::Save));
+                    break;
+                case ACT_EXIT:
+                    a->setShortcut(QKeySequence(QKeySequence::Quit));
+                    break;
+                case ACT_SAVE_BMP:
+                    // Keep Command+M available for the standard Minimize command.
+                    a->setShortcut(QKeySequence(Qt::META | Qt::Key_M));
+                    break;
+                default:
+                    break;
+                }
+#endif
             }
             break;
         }
@@ -1175,6 +1329,8 @@ bool MainWindow::buildMyMenu(void)
 
     connect(ui.menuHelp, SIGNAL(triggered(QAction *)), this, SLOT(searchHelpMenu(QAction *)));
     buildMenu(ui.menuHelp, &myMenuHelp[0], myMenuHelp.size());
+    addMacUpdateAction();
+    addMacWindowMenu();
 
     connect(ui.menuTools, SIGNAL(triggered(QAction *)), this, SLOT(searchToolMenu(QAction *)));
 
@@ -1425,6 +1581,11 @@ void MainWindow::buildButtonLists(void)
 */
 void MainWindow::setMenuItemsEnabledState(void)
 {
+#ifdef __APPLE__
+    if (ui.previewStack)
+        ui.previewStack->setCurrentWidget(avifileinfo ? static_cast<QWidget *>(ui.frame_video)
+                                                     : ui.emptyPreviewPage);
+#endif
     if (playing || (navigateWhilePlayingState != 0)) // this actually doesn't work as it should
     {
         int n = ActionsDisabledOnPlayback.size();
@@ -1930,14 +2091,18 @@ void MainWindow::setDefaultThemeSlot(bool b)
         ADM_info("Slot triggered, current style: %s\n", styleName.toUtf8().constData());
     }
 
+#ifndef __APPLE__
     QStyle *style = QStyleFactory::create(defaultStyle);
     if (!style)
     {
         ADM_warning("Invalid Qt style name \"%s\"\n", defaultStyle.toUtf8().constData());
         return;
     }
+#endif
     QPalette pal; // empty palette to restore native style colors
+#ifndef __APPLE__
     qApp->setStyle(style);
+#endif
     qApp->setPalette(pal);
     ui.currentTime->setTextMargins(0, 0, 0, 0);
 
@@ -2008,6 +2173,7 @@ void MainWindow::setDefaultThemeSlot(bool b)
 void MainWindow::setLightTheme(void)
 {
     mySetStyle();
+#ifndef __APPLE__
     QPalette lightPalette;
     lightPalette.setColor(QPalette::Window, QColor(239, 239, 239));
     lightPalette.setColor(QPalette::WindowText, QColor(0, 0, 0));
@@ -2033,6 +2199,7 @@ void MainWindow::setLightTheme(void)
     qApp->setPalette(lightPalette);
 #ifdef BROKEN_PALETTE_PROPAGATION
     PROPAGATE_PALETTE(lightPalette)
+#endif
 #endif
 #ifdef _WIN32
     setTimeDisplaySize();
@@ -2070,6 +2237,7 @@ void MainWindow::setLightThemeSlot(bool b)
 void MainWindow::setDarkTheme(void)
 {
     mySetStyle();
+#ifndef __APPLE__
     QPalette darkPalette;
     darkPalette.setColor(QPalette::Window, QColor(32, 32, 32));
     darkPalette.setColor(QPalette::WindowText, QColor(234, 234, 234));
@@ -2095,6 +2263,7 @@ void MainWindow::setDarkTheme(void)
     qApp->setPalette(darkPalette);
 #ifdef BROKEN_PALETTE_PROPAGATION
     PROPAGATE_PALETTE(darkPalette)
+#endif
 #endif
 #ifdef _WIN32
     setTimeDisplaySize();
@@ -2392,7 +2561,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (event->mimeData()->hasFormat("text/uri-list"))
+    if (event->mimeData()->hasUrls())
     {
         event->setDropAction(Qt::CopyAction);
         event->accept();
@@ -2927,6 +3096,12 @@ int UI_Init(int nargc, char **nargv)
     QApplication::setAttribute(Qt::AA_DisableWindowContextHelpButton);
 #endif
     myApplication = new myQApplication(global_argc, global_argv);
+#ifdef __APPLE__
+    myApplication->setOrganizationName(QStringLiteral("Avidemux"));
+    myApplication->setOrganizationDomain(QStringLiteral("avidemux.org"));
+    myApplication->setApplicationName(QStringLiteral("Avidemux Mac"));
+    myApplication->setApplicationDisplayName(QStringLiteral("Avidemux Mac"));
+#endif
     myApplication->setDesktopFileName("org.avidemux.Avidemux");
     myApplication->connect(myApplication, SIGNAL(lastWindowClosed()), myApplication, SLOT(quit()));
     myApplication->connect(myApplication, SIGNAL(aboutToQuit()), myApplication, SLOT(cleanup()));
@@ -3045,6 +3220,11 @@ uint8_t initGUI(const vector<IScriptEngine *> &scriptEngines)
     // Init VU meter
     UI_InitVUMeter(mw->ui.frameVU);
 
+#ifdef __APPLE__
+    // Restore our right-side inspector layout after older saved layouts.
+    mw->configureMacMainWindow();
+#endif
+
 #ifdef USE_OPENGL
     if (openglEnabled)
     {
@@ -3060,6 +3240,12 @@ uint8_t initGUI(const vector<IScriptEngine *> &scriptEngines)
     {
         ADM_info("OpenGL not activated, not initialized\n");
     }
+#endif
+#ifdef __APPLE__
+    // Initialize the renderer while its page is active so Qt creates the GL
+    // context and extension bindings before the empty page hides it.
+    mw->ui.previewStack->setCurrentWidget(avifileinfo ? static_cast<QWidget *>(mw->ui.frame_video)
+                                                      : mw->ui.emptyPreviewPage);
 #endif
     mw->syncToolbarsMenu();
 
@@ -3203,6 +3389,7 @@ int UI_RunApp(void)
     UI_applySettings();
 
     // start update checking..
+#ifndef __APPLE__
     bool autoUpdateEnabled = false;
     if (prefs->get(UPDATE_ENABLED, &autoUpdateEnabled))
     {
@@ -3226,6 +3413,7 @@ int UI_RunApp(void)
         }
 #endif
     }
+#endif
 
     myApplication->exec();
 #ifdef USE_OPENGL
@@ -3381,6 +3569,11 @@ void UI_setScale(double val)
 */
 void UI_setTitle(const char *name)
 {
+#ifdef __APPLE__
+    // macOS document windows show the document name, while the application
+    // name remains available in the native app menu and About panel.
+    QuiMainWindows->setWindowTitle(name && *name ? QString::fromUtf8(name) : QStringLiteral("Avidemux Mac"));
+#else
     char *title;
     const char *defaultTitle = "Avidemux";
 
@@ -3401,6 +3594,7 @@ void UI_setTitle(const char *name)
 
     QuiMainWindows->setWindowTitle(QString::fromUtf8(title));
     delete[] title;
+#endif
 }
 
 /**

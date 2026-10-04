@@ -1,0 +1,77 @@
+name: macOS Apple Silicon build
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+  push:
+    branches: [mac-native]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+  workflow_dispatch:
+
+concurrency:
+  group: macos-arm64-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build and codec dependencies
+        run: |
+          brew install make cmake ninja yasm pkg-config bzip2 zlib sqlite \
+            libogg libvorbis opus lame two-lame aom libvpx libass x264 x265 \
+            qtbase qttools qttranslations faac faad2 xvid
+
+      - name: Create a case-sensitive build volume
+        run: |
+          test "$(uname -m)" = arm64
+          hdiutil create -size 10g -type SPARSE -fs 'Case-sensitive APFS' \
+            -volname AvidemuxBuild -ov "$RUNNER_TEMP/AvidemuxBuild.sparseimage"
+          hdiutil attach "$RUNNER_TEMP/AvidemuxBuild.sparseimage" \
+            -mountpoint /Volumes/AvidemuxBuild
+
+      - name: Build app and disk image
+        env:
+          ADM_BUILD_ROOT: /Volumes/AvidemuxBuild
+          ADM_BUILD_JOBS: 4
+          ADM_MACOSX_DEPLOYMENT_TARGET: 14.0
+          ADM_LOG_DIR: ${{ github.workspace }}/buildlogs/macos-arm64
+        run: scripts/macos_arm64_build.sh
+
+      - name: Verify bundle architecture, dependencies, signatures, and minimum macOS
+        env:
+          ADM_MACOSX_DEPLOYMENT_TARGET: 14.0
+        run: scripts/verify_macos_bundle.sh '/Volumes/AvidemuxBuild/installer/Avidemux Mac.app'
+
+      - name: Zip app bundle for artifact
+        run: ditto -c -k --sequesterRsrc --keepParent '/Volumes/AvidemuxBuild/installer/Avidemux Mac.app' 'dist/Avidemux Mac.app.zip'
+
+      - name: Upload app and DMG artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: avidemux-mac-arm64
+          path: |
+            dist/Avidemux Mac.app.zip
+            dist/Avidemux Mac *.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avidemux-mac-arm64-build-logs
+          path: buildlogs/macos-arm64
+          if-no-files-found: warn
+          retention-days: 7

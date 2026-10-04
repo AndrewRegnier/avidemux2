@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDisplayName</key>
-	<string>Avidemux@S_VERSION@.app</string>
+	<string>Avidemux Mac</string>
 	<key>CFBundleExecutable</key>
 	<string>Avidemux@S_VERSION@</string>
 	<key>CFBundleGetInfoString</key>
@@ -13,11 +13,11 @@
 	<key>CFBundleIconFile</key>
 	<string>avidemux.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>Avidemux.org</string>
+	<string>com.andrewregnier.avidemuxmac</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Avidemux@S_VERSION@.app</string>
+	<string>Avidemux Mac</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleDocumentTypes</key>
@@ -58,7 +58,7 @@
 		</dict>
 	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>Avidemux @B_VERSION@</string>
+	<string>@B_VERSION@</string>
 	<key>CFBundleSignature</key>
 	<string>Avid</string>
 	<key>CFBundleVersion</key>
@@ -68,7 +68,7 @@
 	<key>LSHasLocalizedDisplayName</key>
 	<false/>
 	<key>LSMinimumSystemVersion</key>
-	<string>10.5</string>
+	<string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSAppleScriptEnabled</key>

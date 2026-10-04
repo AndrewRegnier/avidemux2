@@ -109,6 +109,9 @@ public:
 
     MainWindow(const std::vector<IScriptEngine*>& scriptEngines);
     virtual ~MainWindow();
+#ifdef __APPLE__
+    void configureMacMainWindow(void);
+#endif
 
     void buildCustomMenu(void);
     void buildRecentMenu(void);
@@ -188,6 +191,8 @@ protected:
     void addScriptEnginesToFileMenu(std::vector<MenuEntry>& fileMenu);
     void addScriptShellsToToolsMenu(vector<MenuEntry>& toolMenu);
     void addScriptReferencesToHelpMenu();
+    void addMacUpdateAction();
+    void addMacWindowMenu();
     void addSessionRestoreToRecentMenu(vector<MenuEntry>& menu);
     bool buildMyMenu(void);
     bool buildMenu(QMenu *root,MenuEntry *menu, int nb);
@@ -224,6 +229,9 @@ protected:
     QTimer statusBarTimer, statusBarFlashTimer;
     QLabel * statusBarInfo;
     QLabel * statusBarMessage;
+#ifdef __APPLE__
+    bool macInitialLayoutApplied;
+#endif
     int statusBarInfo_Zoom;
     QString statusBarInfo_Display, statusBarInfo_Decoder;
 

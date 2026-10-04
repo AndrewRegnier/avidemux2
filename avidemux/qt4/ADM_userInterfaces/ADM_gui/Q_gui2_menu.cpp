@@ -18,6 +18,7 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QUrl>
 #include <QtGui/QDesktopServices>
+#include <QApplication>
 
 #include "config.h"
 #include "Q_gui2.h"
@@ -143,6 +144,62 @@ void MainWindow::addScriptReferencesToHelpMenu()
     {
         ui.menuHelp->insertSeparator(beforeAction);
     }
+}
+
+void MainWindow::addMacUpdateAction()
+{
+#ifdef __APPLE__
+    QAction *beforeAction = ui.menuHelp->actions().isEmpty() ? NULL : ui.menuHelp->actions().last();
+    if (beforeAction && !beforeAction->isSeparator())
+        ui.menuHelp->insertSeparator(beforeAction);
+
+    QAction *action = new QAction(tr("Check for Updates…"), ui.menuHelp);
+    action->setObjectName("actionCheckForUpdates");
+    if (beforeAction)
+        ui.menuHelp->insertAction(beforeAction, action);
+    else
+        ui.menuHelp->addAction(action);
+
+    connect(action, &QAction::triggered, this, [] {
+        QDesktopServices::openUrl(QUrl("https://github.com/AndrewRegnier/avidemux2/releases"));
+    });
+#endif
+}
+
+void MainWindow::addMacWindowMenu()
+{
+#ifdef __APPLE__
+    QMenu *windowMenu = new QMenu(tr("Window"), this);
+    windowMenu->setObjectName("menuWindow");
+
+    QAction *minimizeAction = windowMenu->addAction(tr("Minimize"));
+    minimizeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_M));
+    connect(minimizeAction, &QAction::triggered, this, [this] { showMinimized(); });
+
+    QAction *zoomAction = windowMenu->addAction(tr("Zoom"));
+    connect(zoomAction, &QAction::triggered, this, [this] {
+        if (isMaximized())
+            showNormal();
+        else
+            showMaximized();
+    });
+
+    windowMenu->addSeparator();
+    QAction *bringToFrontAction = windowMenu->addAction(tr("Bring All to Front"));
+    connect(bringToFrontAction, &QAction::triggered, this, [] {
+        const QWidgetList windows = QApplication::topLevelWidgets();
+        for (QWidget *window : windows)
+        {
+            if (window->isVisible())
+            {
+                window->raise();
+                window->activateWindow();
+            }
+        }
+    });
+
+    ui.menubar->insertMenu(ui.menuHelp->menuAction(), windowMenu);
+#endif
 }
 
 void MainWindow::scriptReferenceActionHandler()

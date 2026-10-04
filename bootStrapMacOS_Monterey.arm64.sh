@@ -30,12 +30,12 @@ Process()
     SOURCEDIR=$2
     EXTRA="$3"
     DEBUG=""
-    BUILDER="Unix Makefiles"
+    BUILDER="Ninja"
     echo "**************** $1 *******************"
     if [ "x$debug" = "x1" ] ; then
         DEBUG="-DVERBOSE=1 -DCMAKE_BUILD_TYPE=Debug"
         BASE="${BASE}_debug"
-        BUILDER="CodeBlocks - Unix Makefiles"
+        BUILDER="Ninja"
     fi
     BUILDDIR="${PWD}/${BASE}"
     FAKEROOT=""
@@ -52,6 +52,7 @@ Process()
     pushd "$BUILDDIR" > /dev/null
     cmake \
     -DCMAKE_OSX_ARCHITECTURES="arm64" \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DAVIDEMUX_SOURCE_DIR="$SOURCEDIR" \
     -DAVIDEMUX_VERSION="$ADM_VERSION" \
@@ -61,13 +62,17 @@ Process()
     $DEBUG \
     -G "$BUILDER" \
     "$SOURCEDIR" || fail cmakeZ
-    make > /tmp/log${BASE} || fail make
+    BUILD_LOG="${ADM_LOG_DIR:-${BUILDTOP}}/${BASE}.log"
+    cmake --build . --parallel "${ADM_BUILD_JOBS:-$(sysctl -n hw.logicalcpu)}" > "$BUILD_LOG" 2>&1 || {
+        echo "Build failed; see $BUILD_LOG"
+        fail make
+    }
     if [ -n "$FAKEROOT_DIR" ] ; then
         echo "** installing to $FAKEROOT_DIR **"
     else
         echo "** installing to $PREFIX **"
     fi
-    DESTDIR="$FAKEROOT_DIR" make install || fail install
+    DESTDIR="$FAKEROOT_DIR" cmake --install . || fail install
     popd > /dev/null
 }
 printModule()
@@ -88,7 +93,7 @@ config()
         else echo   "Release build"
         fi
         if [ "x$adm_version" = "x" ] ; then
-            export ADM_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        export ADM_VERSION="${MAJOR}.${MINOR}.${PATCH}"
         else
             export ADM_VERSION=$adm_version
         fi
@@ -122,7 +127,7 @@ usage()
         echo "  --with-qt               : Build qt (default)"
         echo "  --without-qt            : Don't build qt"
         echo "  --with-plugins          : Build plugins (default)"
-        echo "  --without-plugins       : Don't build plugins"
+echo "  --without-plugins       : Don't build plugins"
         echo "  --with-internal-liba52  : Use bundled liba52 (a52dec) instead of the system one"
         echo "  --with-external-libmad  : Use system libmad instead of the bundled one"
         echo "  --with-internal-libmp4v2: Use bundled libmp4v2 instead of the system one"
@@ -194,7 +199,7 @@ external_libmad=0
 external_libmp4v2=1
 
 export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
-export MACOSX_DEPLOYMENT_TARGET=$(xcrun --sdk macosx --show-sdk-version)
+export MACOSX_DEPLOYMENT_TARGET="${ADM_MACOSX_DEPLOYMENT_TARGET:-14.0}"
 
 test -f $HOME/myCC  && export COMPILER="-DCMAKE_C_COMPILER=$HOME/myCC -DCMAKE_CXX_COMPILER=$HOME/myC++"
 
@@ -271,8 +276,11 @@ done
 isCaseSensitive || { echo "Error: build directory file system is not case-sensitive." && exit 1; }
 
 validate adm_version "$adm_version" || exit 1
-validate output "$dmg_base" || exit 1
 config
+if [ -z "$dmg_base" ]; then
+    dmg_base="Avidemux Mac ${ADM_VERSION}"
+fi
+validate output "$dmg_base" || exit 1
 # If the path to a custom Qt installation is passed via MYQT variable,
 # check for a conflicting one from Homebrew.
 if [ -n "$MYQT" ] && [ -f "/opt/homebrew/bin/qmake" ]; then
@@ -312,11 +320,7 @@ else
         echo -e "****************************************************************\n"
         exit 1
     fi
-    if [ -d "/opt/homebrew/opt/qt@6" ]; then
-        export QTDIR="/opt/homebrew/opt/qt@6"
-    elif [ -d "/opt/homebrew/opt/qt6" ]; then
-        export QTDIR="/opt/homebrew/opt/qt6"
-    fi
+    export QTDIR="$(qmake -query QT_INSTALL_PREFIX)"
     if [ -z "$QTDIR" ]; then
         echo -e "\n****************************************************************"
         echo -e "Qt6 from Homebrew not found at expected locations"
@@ -341,12 +345,18 @@ if [ "x$debug" = "x1" ] ; then
 fi
 if [ "x$external_liba52" = "x1" ]; then
     EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_LIBA52=true $EXTRA_CMAKE_DEFS"
+else
+    EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_LIBA52=false $EXTRA_CMAKE_DEFS"
 fi
 if [ "x$external_libmad" = "x1" ]; then
     EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_LIBMAD=true $EXTRA_CMAKE_DEFS"
+else
+    EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_LIBMAD=false $EXTRA_CMAKE_DEFS"
 fi
 if [ "x$external_libmp4v2" = "x1" ]; then
     EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_MP4V2=true $EXTRA_CMAKE_DEFS"
+else
+    EXTRA_CMAKE_DEFS="-DUSE_EXTERNAL_MP4V2=false $EXTRA_CMAKE_DEFS"
 fi
 DO_BUNDLE=""
 FAKEROOT_DIR=""
@@ -373,7 +383,7 @@ if [ "x$do_plugins" = "x1" ] ; then
 fi
 if [ "x$do_plugins" = "x1" -a "x$do_qt4" = "x1" ] ; then
     echo "** Plugins Qt **"
-    Process buildPlugins${QT_EXT} "${SRCTOP}/avidemux_plugins" "-DPLUGIN_UI=QT4 EXTRA_CMAKE_DEFS"
+        Process buildPlugins${QT_EXT} "${SRCTOP}/avidemux_plugins" "-DPLUGIN_UI=QT4 $EXTRA_CMAKE_DEFS"
 fi
 if [ "x$do_plugins" = "x1" -a "x$do_cli" = "x1" ] ; then
     echo "** Plugins CLI **"
@@ -422,7 +432,10 @@ if [ "x$create_app_bundle" = "x1" ] ; then
         $FLAVOR \
         "${SRCTOP}/avidemux/osxInstaller" || fail "cmake"
         echo "** Preparing packaging **"
-        make package
+        cmake --build . --target package --parallel "${ADM_BUILD_JOBS:-$(sysctl -n hw.logicalcpu)}" > "${ADM_LOG_DIR:-${BUILDTOP}}/package.log" 2>&1 || {
+            echo "Packaging failed; see ${ADM_LOG_DIR:-${BUILDTOP}}/package.log"
+            fail package
+        }
     fi
 fi
 echo "** ALL DONE **"

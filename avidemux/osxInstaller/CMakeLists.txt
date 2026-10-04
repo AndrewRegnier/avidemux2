@@ -36,7 +36,7 @@ IF(NOT QT_FOUND)
   MESSAGE(FATAL_ERROR "Qt not found")
 ENDIF()
 
-SET(BUNDLE_NAME "Avidemux-${AVIDEMUX_VERSION}.app")
+SET(BUNDLE_NAME "Avidemux Mac.app")
 SET(BUNDLE "${CMAKE_BINARY_DIR}/${BUNDLE_NAME}")
 SET(RESOURCES  "${BUNDLE}/Contents/Resources")
 #
@@ -49,8 +49,12 @@ FILE(MAKE_DIRECTORY "${BUNDLE}/Contents/Resources")
 #
 LIST(APPEND bundleDirs  "${BUNDLE}/Contents/Resources/lib")
 IF(ENABLE_QT6)
-  # A gross hack to work around the failure to resolve @loader_path for libbrotli.
-  LIST(APPEND bundleDirs "/usr/local/lib")
+  # Homebrew's Apple Silicon libraries are installed under /opt/homebrew.
+  IF(ADM_CPU_ARM64)
+    LIST(APPEND bundleDirs "/opt/homebrew/lib")
+  ELSE()
+    LIST(APPEND bundleDirs "/usr/local/lib")
+  ENDIF()
 ENDIF()
 #
 
@@ -118,7 +122,15 @@ FILE(APPEND "${QT_CONF}" "Plugins = PlugIns\n")
 # Copy fonts, i18n and icons
 FILE(COPY "${ORIGINAL}/Contents/Resources/share" DESTINATION "${RESOURCES}")
 FILE(COPY "${ORIGINAL}/Contents/Resources/fonts" DESTINATION "${RESOURCES}")
+FILE(MAKE_DIRECTORY "${RESOURCES}/Documentation")
 FILE(COPY "${ORIGINAL}/Contents/Resources/avidemux.icns" DESTINATION "${RESOURCES}")
+FILE(COPY "${CMAKE_SOURCE_DIR}/../../COPYING" "${CMAKE_SOURCE_DIR}/../../License.txt"
+     "${CMAKE_SOURCE_DIR}/../../AUTHORS" DESTINATION "${RESOURCES}/Documentation")
+FILE(WRITE "${RESOURCES}/Documentation/Source.txt"
+  "Avidemux Mac is derived from the Avidemux project.\n"
+  "Upstream source: https://github.com/mean00/avidemux2\n"
+  "Fork source: https://github.com/AndrewRegnier/avidemux2\n"
+  "See COPYING and License.txt for license terms and AUTHORS for upstream credits.\n")
 
 # Entice macOS to return correct system language (QTBUG-72491)
 FILE(GLOB ListOfTranslationFiles "${RESOURCES}/share/avidemux6/qt${ADM_QT_VERSION}/i18n/avidemux_*.qm")
@@ -138,7 +150,7 @@ INSTALL(SCRIPT "${CMAKE_BINARY_DIR}/admFixupBundle.cmake" COMPONENT Runtime)
 MESSAGE(STATUS "* Creating dmg *")
 # Call cpack to create the dmg using the dragndrop installer
 IF(NOT DMG_BASENAME)
-  SET(DMG_BASENAME "Avidemux ${AVIDEMUX_VERSION}")
+  SET(DMG_BASENAME "Avidemux Mac ${AVIDEMUX_VERSION}")
   IF(ENABLE_QT6)
     SET(DMG_BASENAME "${DMG_BASENAME} Qt6")
   ELSE()
@@ -154,7 +166,7 @@ ENDIF()
 #
 SET(CPACK_GENERATOR         "DragNDrop")
 SET(CPACK_PACKAGE_NAME      "Avidemux")
-SET(CPACK_PACKAGE_VENDOR    "Mean")
+SET(CPACK_PACKAGE_VENDOR    "Avidemux Mac contributors")
 SET(CPACK_SOURCE_GENERATOR  "")
 SET(CPACK_PACKAGE_FILE_NAME "${DMG_BASENAME}")
 SET(CPACK_DMG_FORMAT        "UDBZ")
@@ -168,4 +180,3 @@ INSTALL(DIRECTORY "${BUNDLE}" DESTINATION . COMPONENT Runtime USE_SOURCE_PERMISS
 INCLUDE(CPack)
 
 MESSAGE(STATUS "* All done *")
-
