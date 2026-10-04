@@ -1373,8 +1373,14 @@ bool A_loadDefaultSettings(void)
         return A_runPythonScript(getDefaultSettingsFilePath());
     }
     else
-    { // default to MKV as output container instead of AVI if no user defined default settings exist
+    {
+#ifdef __APPLE__
+        // Use a QuickTime-friendly container when no saved default script exists.
+        return video_body->setContainer("mp4", NULL);
+#else
+        // Default to MKV instead of AVI when no user-defined settings exist.
         return video_body->setContainer("MKV", NULL);
+#endif
     }
     return false;
 }

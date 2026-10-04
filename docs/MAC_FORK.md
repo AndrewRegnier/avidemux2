@@ -90,6 +90,10 @@ The Mac app follows the system appearance. Settings use Command-comma, and the
 Window menu provides Minimize, Zoom and Bring All to Front. Help → Check for
 Updates opens this fork's releases page.
 
+The initial export container is MP4 on macOS so typical H.264/AAC clips can be
+opened in QuickTime. Saved default scripts and project container choices are
+restored normally.
+
 ## Validation
 
 The delivered bundle should be checked recursively for ARM64 Mach-O binaries,
