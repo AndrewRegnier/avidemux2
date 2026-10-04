@@ -19,6 +19,7 @@
 #include "Q_about.h"
 #include "ADM_inttype.h"
 #include "ADM_toolkitQt.h"
+#include <QApplication>
 
 extern uint8_t DIA_license(void);
 
@@ -47,14 +48,25 @@ Ui_aboutWindow::Ui_aboutWindow(QWidget* parent) : QDialog(parent)
 #endif
     QString sv(subversion);
     ui.labelVersion->setTextFormat(Qt::RichText);
+#ifdef __APPLE__
+    setWindowTitle(tr("About Avidemux Mac"));
+    resize(480, 250);
+    ui.labelVersion->setText(QApplication::applicationDisplayName() + sv);
+    ui.labelCategory->setText(tr("Apple Silicon native port of Avidemux"));
+#else
     ui.labelVersion->setText(ui.labelVersion->text() + sv);
+#endif
 #if !defined(COPYRIGHT_YEAR)
     #define COPYRIGHT_YEAR 2022
 #endif
     subversion[0] = '\0';
     snprintf(subversion, SBUFLEN, "© 2001 - %d  Mean / eumagga0x2a", COPYRIGHT_YEAR); // doesn't need to be translatable
     ui.labelCopy->setText(QString::fromUtf8(subversion));
+#ifdef __APPLE__
+    ui.labelUrl->setText("<a href=\"https://github.com/AndrewRegnier/avidemux2\">Avidemux Mac source and releases</a>");
+#else
     ui.labelUrl->setText("<a href=\"http://www.avidemux.org\">http://www.avidemux.org</a>");
+#endif
 }
 
 void Ui_aboutWindow::licenseButton_clicked(bool)

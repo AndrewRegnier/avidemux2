@@ -383,7 +383,9 @@ namespace ADM_QT4_fileSel
 {
 
 #if defined(__APPLE__)
- #define MAX_LEN 1024
+ // QFileDialog returns UTF-8 paths. Allow for long nested paths and multi-byte
+ // names instead of limiting the callback API to PATH_MAX-sized buffers.
+ #define MAX_LEN 4096
 #else
  #define MAX_LEN 4096
 #endif
@@ -496,11 +498,18 @@ uint8_t FileSel_SelectDir(const char *title, char *target, uint32_t max, const c
 
     QString fileName = QFileDialog::getExistingDirectory(fileSelGetParent(), title, start, QFileDialog::ShowDirsOnly);
 
-    if (fileName.isNull())
+    if (fileName.isEmpty())
         return 0;
 
     const char *s = fileName.toUtf8().constData();
+    const size_t length = strlen(s);
+    if (!length || !max || length >= max)
+    {
+        ADM_warning("Selected directory path length %zu does not fit max %u\n", length, max);
+        return 0;
+    }
     strncpy(target, s, max);
+    target[length] = '\0';
     lastRead = s;
     admCoreUtils::setLastReadFolder(lastRead);
 
@@ -560,4 +569,3 @@ void initFileSelector(void)
 {
         DIA_fileSelInit(&Qt4FileSelDesc);
 }
-
