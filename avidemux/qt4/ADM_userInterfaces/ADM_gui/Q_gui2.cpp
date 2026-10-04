@@ -272,7 +272,7 @@ void MainWindow::configureMacMainWindow(void)
     ui.selectionWidget->setAllowedAreas(Qt::RightDockWidgetArea);
     ui.selectionWidget->setMinimumWidth(292);
     ui.selectionWidget->setMaximumWidth(360);
-    ui.selectionWidget->setMinimumHeight(154);
+    ui.selectionWidget->setMinimumHeight(124);
     ui.selectionWidget->setMaximumHeight(QWIDGETSIZE_MAX);
     ui.dockWidgetContents_7->setMinimumWidth(0);
     ui.dockWidgetContents_7->setMaximumWidth(QWIDGETSIZE_MAX);
@@ -280,8 +280,14 @@ void MainWindow::configureMacMainWindow(void)
     ui.selectionHeading->setVisible(true);
     ui.label_2->setText(tr("Marker A"));
     ui.label_9->setText(tr("Marker B"));
-    ui.navigationWidget->setMinimumHeight(148);
-    ui.navigationWidget->setMaximumHeight(190);
+    ui.navigationWidget->setMinimumHeight(120);
+    ui.navigationWidget->setMaximumHeight(132);
+    ui.verticalSpacer_8->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_12->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_9->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_13->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalSpacer_10->changeSize(20, 5, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui.verticalLayout_3->invalidate();
     ui.toolBar->setMovable(false);
     ui.toolBar->setFloatable(false);
     ui.toolBar->setIconSize(QSize(22, 22));
@@ -346,6 +352,10 @@ void MainWindow::configureMacMainWindow(void)
         resize(initialSize);
         macInitialLayoutApplied = true;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    resizeDocks(QList<QDockWidget *>() << ui.codecWidget << ui.selectionWidget,
+                QList<int>() << 344 << 128, Qt::Vertical);
+#endif
 
     // Qt's macOS style follows the current system appearance automatically.
     // The separate legacy theme submenu would imply a fixed app appearance.

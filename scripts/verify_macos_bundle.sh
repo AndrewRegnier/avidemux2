@@ -58,6 +58,11 @@ while IFS= read -r -d '' path; do
     done <<< "$rpaths"
 
     deps="$(/usr/bin/otool -L "$path" | tail -n +2)"
+    if /usr/bin/otool -l "$path" | /usr/bin/grep -q 'cmd LC_ID_DYLIB'; then
+        # The first entry after the otool header is a dylib's own install ID,
+        # not one of its load dependencies.
+        deps="$(printf '%s\n' "$deps" | tail -n +2)"
+    fi
     while IFS= read -r line; do
         dep="$(printf '%s\n' "$line" | /usr/bin/sed -E 's/^[[:space:]]*([^ ]+).*/\1/')"
         [[ -z "$dep" ]] && continue
