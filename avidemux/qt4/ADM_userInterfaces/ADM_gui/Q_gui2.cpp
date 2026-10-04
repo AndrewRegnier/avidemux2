@@ -327,7 +327,10 @@ void MainWindow::configureMacMainWindow(void)
 
     if (!macEmptyVideoState)
     {
-        macEmptyVideoState = new QLabel(ui.frame_video);
+        // Keep the prompt above the renderer widget. Some video backends use
+        // child/native surfaces which paint over sibling overlays in the
+        // frame itself, so parent the prompt to the central widget instead.
+        macEmptyVideoState = new QLabel(ui.centralwidget);
         macEmptyVideoState->setObjectName(QStringLiteral("macEmptyVideoState"));
         macEmptyVideoState->setText(
             tr("<b>Open a video to begin</b><br><small>Drop a video here or choose File → Open…</small>"));
@@ -339,11 +342,13 @@ void MainWindow::configureMacMainWindow(void)
             QStringLiteral("QLabel { color: rgba(230, 234, 242, 190); background: transparent; }"));
         macEmptyVideoState->setAccessibleName(tr("No video loaded"));
         macEmptyVideoState->setAccessibleDescription(tr("Drop a video file here or use File, Open."));
-        macEmptyVideoState->setGeometry(ui.frame_video->rect());
+        const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
+        macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
         macEmptyVideoState->show();
         ui.frame_video->installEventFilter(this);
     }
-    macEmptyVideoState->setGeometry(ui.frame_video->rect());
+    const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
+    macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
     macEmptyVideoState->setVisible(!avifileinfo);
     macEmptyVideoState->raise();
 
@@ -2514,11 +2519,23 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 #ifdef __APPLE__
         else if (watched == ui.frame_video && macEmptyVideoState)
         {
-            macEmptyVideoState->setGeometry(ui.frame_video->rect());
+            const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
+            macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
             macEmptyVideoState->raise();
         }
 #endif
         break;
+
+#ifdef __APPLE__
+    case QEvent::Move:
+        if (watched == ui.frame_video && macEmptyVideoState)
+        {
+            const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
+            macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
+            macEmptyVideoState->raise();
+        }
+        break;
+#endif
 
     case QEvent::KeyRelease:
         keyEvent = (QKeyEvent *)event;
