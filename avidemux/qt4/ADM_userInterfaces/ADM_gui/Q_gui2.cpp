@@ -324,33 +324,18 @@ void MainWindow::configureMacMainWindow(void)
     ui.frame_video->setPalette(videoPalette);
     ui.frame_video->setAutoFillBackground(true);
     ui.frame_video->setAccessibleName(tr("Video preview"));
-
-    if (!macEmptyVideoState)
-    {
-        // Keep the prompt above the renderer widget. Some video backends use
-        // child/native surfaces which paint over sibling overlays in the
-        // frame itself, so parent the prompt to the central widget instead.
-        macEmptyVideoState = new QLabel(ui.centralwidget);
-        macEmptyVideoState->setObjectName(QStringLiteral("macEmptyVideoState"));
-        macEmptyVideoState->setText(
-            tr("<b>Open a video to begin</b><br><small>Drop a video here or choose File → Open…</small>"));
-        macEmptyVideoState->setTextFormat(Qt::RichText);
-        macEmptyVideoState->setAlignment(Qt::AlignCenter);
-        macEmptyVideoState->setMargin(24);
-        macEmptyVideoState->setAttribute(Qt::WA_TransparentForMouseEvents);
-        macEmptyVideoState->setStyleSheet(
-            QStringLiteral("QLabel { color: rgba(230, 234, 242, 190); background: transparent; }"));
-        macEmptyVideoState->setAccessibleName(tr("No video loaded"));
-        macEmptyVideoState->setAccessibleDescription(tr("Drop a video file here or use File, Open."));
-        const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
-        macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
-        macEmptyVideoState->show();
-        ui.frame_video->installEventFilter(this);
-    }
-    const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
-    macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
-    macEmptyVideoState->setVisible(!avifileinfo);
-    macEmptyVideoState->raise();
+    ui.previewStack->setFrameShape(QFrame::NoFrame);
+    ui.previewStack->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui.emptyPreviewPage->setAutoFillBackground(true);
+    ui.emptyPreviewPage->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    ui._10->setStretch(0, 1);
+    ui._10->setStretch(1, 0);
+    ui.emptyPreviewPage->setPalette(videoPalette);
+    ui.emptyPreviewLabel->setStyleSheet(
+        QStringLiteral("QLabel { color: rgba(230, 234, 242, 190); background: transparent; }"));
+    // Keep the renderer page active until its video widget and GL context are
+    // initialized in UI_RunApp. That page becomes the empty state afterward.
+    ui.previewStack->setCurrentWidget(ui.frame_video);
 
     if (!macInitialLayoutApplied)
     {
@@ -828,8 +813,11 @@ MainWindow::MainWindow(const vector<IScriptEngine *> &scriptEngines) : _scriptEn
     qtRegisterDialog(this);
     ui.setupUi(this);
 #ifdef __APPLE__
-    macEmptyVideoState = NULL;
     macInitialLayoutApplied = false;
+#else
+    // Keep the traditional video canvas active on other platforms; the Mac
+    // build switches between this page and its dedicated empty state.
+    ui.previewStack->setCurrentWidget(ui.frame_video);
 #endif
     dragState = dragState_Normal;
     navigateByTimeButtonsState = 0;
@@ -1594,12 +1582,9 @@ void MainWindow::buildButtonLists(void)
 void MainWindow::setMenuItemsEnabledState(void)
 {
 #ifdef __APPLE__
-    if (macEmptyVideoState)
-    {
-        macEmptyVideoState->setVisible(!avifileinfo);
-        if (!avifileinfo)
-            macEmptyVideoState->raise();
-    }
+    if (ui.previewStack)
+        ui.previewStack->setCurrentWidget(avifileinfo ? static_cast<QWidget *>(ui.frame_video)
+                                                     : ui.emptyPreviewPage);
 #endif
     if (playing || (navigateWhilePlayingState != 0)) // this actually doesn't work as it should
     {
@@ -2516,26 +2501,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             thumbSlider->resize(ui.sliderPlaceHolder->width(), 16);
             thumbSlider->move(0, (ui.sliderPlaceHolder->height() - thumbSlider->height()) / 2);
         }
-#ifdef __APPLE__
-        else if (watched == ui.frame_video && macEmptyVideoState)
-        {
-            const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
-            macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
-            macEmptyVideoState->raise();
-        }
-#endif
         break;
-
-#ifdef __APPLE__
-    case QEvent::Move:
-        if (watched == ui.frame_video && macEmptyVideoState)
-        {
-            const QPoint previewOrigin = ui.frame_video->mapTo(ui.centralwidget, QPoint(0, 0));
-            macEmptyVideoState->setGeometry(QRect(previewOrigin, ui.frame_video->size()));
-            macEmptyVideoState->raise();
-        }
-        break;
-#endif
 
     case QEvent::KeyRelease:
         keyEvent = (QKeyEvent *)event;
@@ -3255,8 +3221,7 @@ uint8_t initGUI(const vector<IScriptEngine *> &scriptEngines)
     UI_InitVUMeter(mw->ui.frameVU);
 
 #ifdef __APPLE__
-    // Restore our right-side inspector layout after older saved layouts and
-    // place the empty preview prompt above the rendering surface.
+    // Restore our right-side inspector layout after older saved layouts.
     mw->configureMacMainWindow();
 #endif
 
@@ -3275,6 +3240,12 @@ uint8_t initGUI(const vector<IScriptEngine *> &scriptEngines)
     {
         ADM_info("OpenGL not activated, not initialized\n");
     }
+#endif
+#ifdef __APPLE__
+    // Initialize the renderer while its page is active so Qt creates the GL
+    // context and extension bindings before the empty page hides it.
+    mw->ui.previewStack->setCurrentWidget(avifileinfo ? static_cast<QWidget *>(mw->ui.frame_video)
+                                                      : mw->ui.emptyPreviewPage);
 #endif
     mw->syncToolbarsMenu();
 

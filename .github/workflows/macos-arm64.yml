@@ -2,9 +2,19 @@ name: macOS Apple Silicon build
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
   push:
     branches: [mac-native]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
   workflow_dispatch:
+
+concurrency:
+  group: macos-arm64-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

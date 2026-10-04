@@ -230,7 +230,6 @@ protected:
     QLabel * statusBarInfo;
     QLabel * statusBarMessage;
 #ifdef __APPLE__
-    QLabel * macEmptyVideoState;
     bool macInitialLayoutApplied;
 #endif
     int statusBarInfo_Zoom;
