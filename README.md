@@ -1,4 +1,14 @@
-# Avidemux 
+# Avidemux Mac
+
+This is the macOS-focused fork of [Avidemux](https://github.com/mean00/avidemux2),
+maintained at [AndrewRegnier/avidemux2](https://github.com/AndrewRegnier/avidemux2).
+It builds on Avidemux's video editor and codec support with a native Apple Silicon
+build and macOS interface improvements. See [the fork notes](docs/MAC_FORK.md)
+for scope, build and distribution details.
+
+The upstream instructions below remain useful for other platforms.
+
+# Avidemux
 
 Avidemux is a simple cross-platform video editor for Linux, Windows and macOS.
 
