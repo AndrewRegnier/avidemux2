@@ -27,7 +27,8 @@ Upstream: <https://github.com/mean00/avidemux2>
 Fork: <https://github.com/AndrewRegnier/avidemux2>
 
 The `upstream` remote tracks the original project. The `origin` remote points to
-this fork. Development is on `mac-native`, reviewed against the fork's `master`.
+this fork. The fork's default branch is `mac-native`, reviewed against its
+upstream baseline on `master`.
 Platform-specific UI changes should be guarded so upstream Linux and Windows
 behavior remains available.
 

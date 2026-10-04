@@ -4,13 +4,16 @@
 
 Observed on October 4, 2026 on an Apple Silicon Mac running macOS 27.0,
 using Xcode and Qt 6.11.2. The upstream baseline is `54010b3`; the fork uses
-the 2.8.2 development engine and its bundled FFmpeg 9.0.1.
+the 2.8.2 development engine and its bundled FFmpeg 9.0.1. The final application
+source is `3cdbc52`; subsequent validation-only documentation does not change
+the packaged application.
 
 - The native editor, command-line executable and enabled plugins compiled.
 - The packaged app contains 282 Mach-O files with ARM64 support. Recursive
   checks passed for dependency resolution inside the bundle and ad-hoc signing.
 - The local bundle declares macOS 27.0. A Homebrew dependency requires 27.0,
   so this local package must not be advertised as compatible with macOS 14.
+  The final local app and disk image are preserved in `dist/local-macos27/`.
 - The app launched and rendered a 640×360 H.264 video with AAC audio.
 - A fresh configuration selected MP4 Muxer. File → Save displayed the native
   macOS save panel with an `.mp4` filename. The resulting stream-copy MP4 was
@@ -42,11 +45,22 @@ launched on the development Mac and opened the H.264/AAC fixture through its
 native Open panel; it detected 640×360 at 30 fps and one audio track. This
 baseline precedes the final preview layout change.
 
-## Remaining release checks
+## Final portable package
 
-The final preview layout and its portable release package are still being
-checked. CI verifies every bundled dependency against the declared deployment
-target before uploading an app ZIP and disk image.
+GitHub Actions run [37228220916](https://github.com/AndrewRegnier/avidemux2/actions/runs/37228220916)
+for application source `3cdbc52` completed successfully. Build and packaging
+took 12 minutes 37 seconds, followed by approximately one minute of recursive
+verification. All 282 Mach-O files passed ARM64, dependency and ad-hoc signature
+checks against macOS 14.0. The app ZIP and disk image were downloaded locally.
+
+The extracted final app passed a local launch check: the full-width empty
+prompt and MP4 default appeared; the fixture opened with video and audio;
+advancing a frame rendered without an OpenGL error; Command-W restored the
+empty prompt. Native menu Quit closed the app, confirmed by process inventory.
+
+The deliverable locations are `dist/Avidemux Mac.app` and
+`dist/Avidemux Mac 2.8.2.dmg`. `dist/BUILD_INFO.txt` records artifact provenance
+and the disk image checksum. The local macOS 27 build remains separate.
 
 ## Limits
 
